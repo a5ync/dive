@@ -37,3 +37,5 @@ coverage.txt
 /build
 /_vendor*
 /vendor
+extracted_image
+myimage.tar

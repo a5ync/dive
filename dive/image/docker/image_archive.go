@@ -95,6 +95,7 @@ func NewImageArchive(tarFile io.ReadCloser) (*ImageArchive, error) {
 				// 512 bytes ought to be enough (as that's the size of a TAR entry header),
 				// but play it safe with 1024 bytes. This should also include very small layers
 				// (unless they've also been gzipped, but Docker does not appear to do it)
+				// - well now docker does since using containerd instead of dockerd
 				buffer := make([]byte, 1024)
 				n, err := io.ReadFull(tarReader, buffer)
 				if err != nil && err != io.ErrUnexpectedEOF {
@@ -102,23 +103,21 @@ func NewImageArchive(tarFile io.ReadCloser) (*ImageArchive, error) {
 				}
 
 				// Only try reading a TAR if file is "big enough"
-				if n == cap(buffer) {
-					var unwrappedReader io.Reader
-					unwrappedReader, err = gzip.NewReader(io.MultiReader(bytes.NewReader(buffer[:n]), tarReader))
-					if err != nil {
-						// Not a gzipped entry
-						unwrappedReader = io.MultiReader(bytes.NewReader(buffer[:n]), tarReader)
-					}
+				var unwrappedReader io.Reader
+				unwrappedReader, err = gzip.NewReader(io.MultiReader(bytes.NewReader(buffer[:n]), tarReader))
+				if err != nil {
+					// Not a gzipped entry
+					unwrappedReader = io.MultiReader(bytes.NewReader(buffer[:n]), tarReader)
+				}
 
-					// Try reading a TAR
-					layerReader := tar.NewReader(unwrappedReader)
-					tree, err := processLayerTar(name, layerReader)
-					if err == nil {
-						currentLayer++
-						// add the layer to the image
-						img.layerMap[tree.Name] = tree
-						continue
-					}
+				// Try reading a TAR
+				layerReader := tar.NewReader(unwrappedReader)
+				tree, err := processLayerTar(name, layerReader)
+				if err == nil {
+					currentLayer++
+					// add the layer to the image
+					img.layerMap[tree.Name] = tree
+					continue
 				}
 
 				// Not a TAR (or smaller than our buffer), might be a JSON file
